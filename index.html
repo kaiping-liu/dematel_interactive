@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>DEMATEL 準則/構面互評問卷</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <style>
+    body { font-family: "Segoe UI", "微軟正黑體", Arial, sans-serif; background: #f6f8fa; }
+    .step-wrap { max-width: 740px; margin: 40px auto; background: #fff; border-radius: 18px; box-shadow: 0 2px 14px #0002; padding: 32px 2vw 26px 2vw; }
+    .step-title { font-size: 1.37em; margin-bottom: 24px; font-weight: bold; color: #204b7a; letter-spacing: 1.2px; text-align: center;}
+    .phase-title { font-size: 1.13em; margin-bottom: 13px; color: #27868e; text-align:center; font-weight:600; letter-spacing:2px;}
+    .desc-row { display: flex; justify-content:center; align-items:stretch; gap: 32px; margin-bottom: 22px; }
+    .desc-block { flex:1 1 0; min-width:0; font-size: 1.13em; color:#7a7a7a; line-height:1.85; text-align:left; max-width:340px; display: flex; flex-direction: column; align-items: center; }
+    .block-title { font-size: 1.36em; color: #234c96; background: #f0f4fa; font-weight: bold; border-radius:18px; padding: 6px 32px 6px 32px; margin-bottom: 8px; text-align: center;}
+    .block-vs { color: #a3a8b1; font-size: 1.18em; margin: 0 8px 10px 8px; font-weight:500; align-self:center;}
+    .desc-content { text-align:center; margin-bottom:0; }
+    .relation-group { display: flex; flex-direction:column; gap: 10px; margin-bottom: 20px;}
+    .btn, .score-btn {
+      border: none;
+      border-radius: 8px;
+      padding: 14px 0;
+      background: #f1f3f6;
+      color: #1756ab;
+      font-size: 1.09em;
+      cursor: pointer;
+      transition: background 0.13s, color 0.13s;
+      outline: none;
+      margin-bottom: 3px;
+      width: 100%;
+      text-align: center;
+      font-weight: 500;
+      letter-spacing: 1px;
+    }
+    .btn:hover, .score-btn:hover { background: #d2e7fb; }
+    .btn.selected, .score-btn.selected { background: #1756ab!important; color: #fff!important; font-weight: bold!important;}
+    .hint { color: #555; font-size: 1em; margin-bottom: 12px; line-height:1.6;}
+    .progress { color: #888; margin-bottom: 22px; }
+    .finish { text-align: center; margin: 50px 0; }
+    .download-btn {
+      background: #1756ab;
+      color: #fff;
+      border-radius: 8px;
+      padding: 12px 30px;
+      font-size: 1.15em;
+      border: none;
+      margin-top: 38px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .download-btn:hover { background: #0c2954; }
+    .score-group { display: flex; gap:10px; margin-bottom: 12px; }
+    .score-title { margin-bottom:4px; color:#345; font-size:1.05em; font-weight: 600;}
+    @media (max-width: 900px) {
+      .desc-row { gap:14px; }
+      .block-title { padding: 6px 12px 6px 12px; font-size: 1.06em; }
+      .desc-block { font-size: 1em; max-width:99vw; }
+    }
+    @media (max-width: 650px) {
+      .desc-row { flex-direction: column; gap: 8px; align-items:stretch; }
+      .block-title, .desc-content { text-align:center; }
+      .block-title { border-radius:14px;}
+    }
+    @media (max-width: 600px) {
+      .step-wrap { max-width: 98vw; padding: 18px 2vw 16px 2vw;}
+      .btn, .score-btn { font-size:1em;}
+      .score-group{gap:6px;}
+    }
+  </style>
+</head>
+<body>
+  <div class="step-wrap">
+    <div id="main"></div>
+  </div>
+<script>
+let questions = [], answers = {}, idx = 0, fileName = 'dematel-structure.json';
+let rel = '', score1 = '', score2 = '';
+let critTotal=0, dimTotal=0;
+function formatName(name) {
+  const match = name.match(/^(.+?)\-(.+)$/);
+  if (match) return `(${match[1]})${match[2]}`;
+  return name;
+}
+function fillPrev() {
+  const q = questions[idx];
+  const key = q.key;
+  const prev = answers[key];
+  if (!prev) { rel=''; score1=''; score2=''; return; }
+  rel = prev.relation;
+  if (rel==='to') { score1=prev.score; score2=''; }
+  else if (rel==='from') { score1=''; score2=prev.score; }
+  else if (rel==='bi') { score1=prev.score_XtoY; score2=prev.score_YtoX; }
+  else { score1=''; score2=''; }
+}
+function render() {
+  const el = document.getElementById('main');
+  if(idx >= questions.length) {
+    el.innerHTML = `
+      <div class="finish">
+        <div style="font-size:1.4em;margin-bottom:20px;">✅ 已完成所有題目！</div>
+        <button class="download-btn" onclick="download()">下載結果 (JSON)</button>
+      </div>
+    `; return;
+  }
+  const q = questions[idx];
+  let phaseLabel = q.type==='criteria' ? '準則互相比較' : '構面互相比較';
+  let phaseColor = q.type==='criteria' ? '#3388c6' : '#58aa5a';
+  let nameA = q.A.name, nameB = q.B.name;
+  let descA = q.A.desc||'', descB = q.B.desc||'';
+  let critNow = q.type==='criteria' ? questions.slice(0,idx+1).filter(qq=>qq.type==='criteria').length : critTotal;
+  let dimNow = q.type==='dimension' ? questions.slice(critTotal,idx+1).filter(qq=>qq.type==='dimension').length : (q.type==='criteria'?0:dimTotal);
+  let critText = `準則 ${q.type==='criteria'?critNow:critTotal} / ${critTotal} 題`;
+  let dimText = `構面 ${q.type==='dimension'?dimNow:0} / ${dimTotal} 題`;
+  let percent = Math.floor((idx+1)/questions.length*100);
+  let statusBar = `<div class="progress">
+      <span>${critText}</span>&nbsp;&nbsp;|&nbsp;&nbsp;<span>${dimText}</span>&nbsp;&nbsp;|&nbsp;&nbsp;<span>完成度 ${percent}%</span>
+    </div>`;
+  el.innerHTML = `
+    <div class="phase-title" style="color:${phaseColor}">${phaseLabel}</div>
+    ${statusBar}
+    <div class="step-title">請判斷下列${phaseLabel.replace('比較','')}之間的關係</div>
+    <div class="desc-row">
+      <div class="desc-block">
+        <div class="block-title">${formatName(nameA)}</div>
+        <div class="desc-content">${descA.replace(/\n/g,'<br>')}</div>
+      </div>
+      <div class="block-vs">vs.</div>
+      <div class="desc-block">
+        <div class="block-title">${formatName(nameB)}</div>
+        <div class="desc-content">${descB.replace(/\n/g,'<br>')}</div>
+      </div>
+    </div>
+    <div class="relation-group">
+      <button class="btn${rel==='X'?' selected':''}" type="button" onclick="chooseRel('X')">兩者無關</button>
+      <button class="btn${rel==='to'?' selected':''}" type="button" onclick="chooseRel('to')">${formatName(nameA)} 影響 ${formatName(nameB)}</button>
+      <button class="btn${rel==='from'?' selected':''}" type="button" onclick="chooseRel('from')">${formatName(nameB)} 影響 ${formatName(nameA)}</button>
+      <button class="btn${rel==='bi'?' selected':''}" type="button" onclick="chooseRel('bi')">兩者互相影響</button>
+    </div>
+    <div id="scoreUI"></div>
+    <div>
+      ${idx>0 ? `<button class="btn" style="margin-top:10px;background:#f7f7f7;color:#888;" onclick="prevStep()">← 上一題</button>` : ""}
+      <button class="btn" id="nextBtn" style="margin-top:10px;display:none;" onclick="saveStep()">下一題 →</button>
+    </div>
+  `;
+  renderScore();
+}
+function chooseRel(v) { rel = v; score1 = ''; score2 = ''; render(); }
+function chooseScore(idxN, v) { if(idxN===1) score1 = v; if(idxN===2) score2 = v; renderScore(); }
+function renderScore() {
+  const q = questions[idx];
+  let html = '';
+  if(rel === 'X') { html = `<div class="hint">這兩者<strong>無明顯因果關係</strong>，請直接點選「下一題」。</div>`; document.getElementById('nextBtn').style.display = ''; }
+  else if(rel === 'to') { html = `<div class="hint score-title">${formatName(q.A.name)} 影響 ${formatName(q.B.name)} 的程度：</div><div class="score-group">${[1,2,3,4].map(v=>`<button class="score-btn${score1==v?' selected':''}" onclick="chooseScore(1,${v})">${v}</button>`).join('')}</div>`; document.getElementById('nextBtn').style.display = score1 ? '' : 'none'; }
+  else if(rel === 'from') { html = `<div class="hint score-title">${formatName(q.B.name)} 影響 ${formatName(q.A.name)} 的程度：</div><div class="score-group">${[1,2,3,4].map(v=>`<button class="score-btn${score2==v?' selected':''}" onclick="chooseScore(2,${v})">${v}</button>`).join('')}</div>`; document.getElementById('nextBtn').style.display = score2 ? '' : 'none'; }
+  else if(rel === 'bi') { html = `<div class="hint score-title">${formatName(q.A.name)} 影響 ${formatName(q.B.name)} 及 ${formatName(q.B.name)} 影響 ${formatName(q.A.name)} 的程度：</div><div class="score-title">${formatName(q.A.name)} 影響 ${formatName(q.B.name)}：</div><div class="score-group">${[1,2,3,4].map(v=>`<button class="score-btn${score1==v?' selected':''}" onclick="chooseScore(1,${v})">${v}</button>`).join('')}</div><div class="score-title">${formatName(q.B.name)} 影響 ${formatName(q.A.name)}：</div><div class="score-group">${[1,2,3,4].map(v=>`<button class="score-btn${score2==v?' selected':''}" onclick="chooseScore(2,${v})">${v}</button>`).join('')}</div>`; document.getElementById('nextBtn').style.display = (score1 && score2) ? '' : 'none'; }
+  else { document.getElementById('nextBtn').style.display = 'none'; }
+  document.getElementById('scoreUI').innerHTML = html;
+}
+function saveStep() {
+  const q = questions[idx];
+  let v = { relation: rel };
+  if(rel === 'to') v.score = Number(score1);
+  if(rel === 'from') v.score = Number(score2);
+  if(rel === 'bi') { v.score_XtoY = Number(score1); v.score_YtoX = Number(score2); }
+  answers[q.key] = v;
+  rel=''; score1=''; score2=''; idx++; fillPrev(); render();
+}
+function prevStep() { if(idx>0) idx--; fillPrev(); render(); }
+function loadJSON(name) {
+  fetch(name).then(res=>{
+    if(!res.ok) throw new Error('找不到結構檔');
+    return res.json();
+  }).then(json=>{
+    let items = [];
+    json.forEach(dim => {
+      if(dim.準則 && dim.準則.length>0) {
+        dim.準則.forEach(rule => {
+          items.push({ id: rule.編號, name: `${dim.構面}-${rule.名稱}`, desc: rule.說明||rule.內容||'' });
+        });
+      }
+    });
+    let critQuestions = [];
+    for(let i=0; i<items.length; i++){
+      for(let j=i+1; j<items.length; j++){
+        critQuestions.push({
+          key: `${items[i].id}->${items[j].id}`,
+          type: 'criteria',
+          A: items[i],
+          B: items[j]
+        });
+      }
+    }
+    let dims = json.map(dim => ({ id: dim.構面, name: dim.構面, desc: dim.說明||'' }));
+    let dimQuestions = [];
+    for(let i=0;i<dims.length;i++){
+      for(let j=i+1;j<dims.length;j++){
+        dimQuestions.push({
+          key: `${dims[i].id}->${dims[j].id}`,
+          type: 'dimension',
+          A: dims[i],
+          B: dims[j]
+        });
+      }
+    }
+    questions = critQuestions.concat(dimQuestions);
+    critTotal = critQuestions.length;
+    dimTotal = dimQuestions.length;
+    idx = 0; answers = {}; fillPrev(); render();
+  }).catch(err=>{
+    document.getElementById('main').innerHTML = '<div style="color:#b11;font-size:1.2em;text-align:center">找不到題目結構檔 dematel-structure.json</div>';
+  });
+}
+window.onload = function(){ loadJSON(fileName); }
+function download() {
+  const data = JSON.stringify(answers, null, 2);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], {type: "application/json"}));
+  a.download = fileName.replace(/\.json$/,'') + "_result.json";
+  a.click();
+}
+</script>
+</body>
+</html>
